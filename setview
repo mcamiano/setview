@@ -1,0 +1,257 @@
+#!/bin/bash
+# Shell script to override the default archive for a new command shell
+. ${0%/*}/ENV.setview   # Environment
+
+GIT=${GIT:-$HOME/bin/git}
+STDSOURCETREEROOT=$HOME/workspace
+SOURCETREEROOT=${SOURCETREEROOT:-$STDSOURCETREEROOT}
+EDITOR=${EDITOR:-/bin/vi}
+VIEWMAXDEPTH=7
+export VIEWMAXDEPTH GIT SOURCETREEROOT 
+
+function fusage()
+{
+   echo "$msg"
+   /bin/cat <<EOT
+   setview: override the default archive, setup a direct Arch command environment
+   For general help inside of a view, type "viewhelp"
+
+   Synopsis: 
+      setview { viewname | -v viewname | --view viewname | --viewname viewname } [options]
+      setview [-h | --help] 
+
+   Options:
+      --editlog       ...edit the next commit log and continue
+      --task message  ...append a message to the next commit log and continue
+      --curryarch     ...turn tla subcommands into shell functions and continue
+      --exec cmdlist  ...execute the commands under the view and exit
+      --pause msg     ...prompt with a message and pause just before exiting
+
+   Examples:
+      setview myview
+      setview -v myview
+      setview --view myview --curryarch
+
+      setview --view myview --exec "git add flarg.cpp"
+      setview --view myview --editlog
+      setview --view myview --curryarch --exec "commit"
+
+   When run without arguments, setview prompts interactively for a view name.
+   It also prompts if a view name does not uniquely identify a view.
+
+   Environment:
+      EDITOR        ...the  --editlog option invokes the command in this variable 
+                    to edit the log, or /bin/vi if not set
+
+      VIEWMAXDEPTH  ...depth to search view root dir for {arch} source trees
+                    Source trees are typically nested within customer-specific
+		    or project-specific view subdirectories. This variable
+		    lets you shorten the searches.
+
+   Limitations:
+   The --exec option may pose a risk based on your handling of SSH. 
+   It is intended for invoking archive commends over a lan or intranet through 
+   secured ssh connections. As this script is only a thin layer on tla, and 
+   tla relies mostly on POSIX login mechanisms and signing for security,
+   the --exec feature was not deemed to add much of an additional risk.
+EOT
+}
+
+names="";
+curryarch=0;
+editlog=0;
+execcmd=0;
+cmdstring="";
+pause=0;
+pausestring=0;
+task=0;
+while [[ ! -z "$1" ]]
+do
+   case $1 in
+   -h|--help)
+      fusage ;
+      exit 0;
+   ;;
+   --debug) 
+      export dbg="echo"
+   ;;
+   -v|--viewname|--view)
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         view="$2";
+         # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
+         names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -path $view -not -path */{arch}/* -exec dirname {} \; )
+         shift;
+      fi
+   ;;
+   --editlog)
+      editlog=1;
+   ;;
+   --curryarch)
+      curryarch=1;
+   ;;
+   --pause)
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         pause=1
+         pausestring="$2";
+         shift;
+      fi
+   ;;
+   --exec)
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         execcmd=1
+         cmdstring="$2";
+         shift;
+      fi
+   ;;
+   --task)
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         task=1;
+         taskmessage="$2";
+         shift;
+      fi
+   ;;
+   --*) # reject unknown args
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         read yorn
+         exit 1;
+   ;;
+   *) # default to view name
+      view="$1"
+      # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
+      names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; |grep "$view" )
+   ;;
+   esac
+   shift; # get rid of $1
+done
+
+
+if [[ -z "$names" ]]
+then
+   # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
+   echo "No view name specified, on view not found. Looking up views..." >&2;
+   names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; )
+fi
+
+num=$(echo $names | wc -w)
+if [[ $num -eq 1 ]]
+then
+   view="$names"
+fi
+
+if [[ $num -eq 0 ]]
+then
+   echo "The view '$view' is not a view for any current archive."
+   echo "Please select from the following:"
+   # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
+   select name in  $(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; echo "Quit";)
+   do 
+      if [[ ! -z "$name" ]]
+      then
+         view="$name";
+         break;
+      else
+         echo "The selection you made is not an option. Quitting..."
+	 exit
+      fi
+   done
+else
+  if [[ $num -gt 1 ]]
+  then
+   echo "Views by the name '$view' exist for multiple archives."
+   echo "Please select from the following:"
+   select name in  $names "Quit"
+   do 
+      if [[ ! -z "$name" ]]
+      then
+         view="$name";
+         break;
+      else
+         echo "The selection you made is not an option. Quitting..."
+	 exit 1
+      fi
+   done
+  fi
+fi
+
+if [[ "$view" = "Quit" ]]
+then
+   exit;
+fi
+
+prompt=$(basename $view)
+archname=$(basename $(dirname $view) )
+   # mca 12/12/2005 fix up locating of source tree directories
+GITarchive=$(/bin/cat "$view/{arch}/++default-version"|cut -d"/" -f1)
+
+if [[ $GITarchive  = "" ]]
+then
+   echo "The archive $archname appears to be missing. Quitting..." >&2
+   exit 1;
+fi
+
+(
+   thisarchive="$archname"
+   thisview="$prompt"
+   # mca 12/12/2005 fix up locating of source tree directories
+   thishome="$view"
+   VIEWHOME="$view"
+   export PS1="$prompt: " 
+   export thisview thisarchive GITarchive thishome VIEWHOME
+
+   cd "$VIEWHOME"
+   . "${0%/*}/setview.setup" 
+
+
+   if [[ $task == "1" ]]    # Append task message to commit log
+   then
+      log=$(tla make-log 2>/dev/null);
+      echo "$taskmessage"  >> "$log";
+   fi
+
+   if [[ "$editlog" == "1" ]]   # invoke editor on commit log
+   then
+      "$EDITOR" -- $($GIT make-log 2>/dev/null)
+   fi
+
+   if [[ $curryarch == "1" ]]   # introduce tla subcommands as shell functions
+   then
+      tlacurryallfaster
+   fi
+
+   if [[ $execcmd == "0" ]]
+   then
+         # Make the terminal window look 'reset'
+      clear
+      pwd
+         # Invoke a new login under the reconfigured environment
+      bash --login
+   else
+         # Use the reconfigured environment but execute the commands and exit
+      bash --login -c "$cmdstring"
+   fi
+)
+if [[ $pause == "1" ]]
+then
+   read -p "$pausestring" yorn
+fi

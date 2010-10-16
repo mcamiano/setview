@@ -1,0 +1,212 @@
+#!/bin/bash
+# Shell script to install the setview scripts
+SOURCETREEROOT=${SOURCETREEROOT:-$HOME/workspace
+ARCHLOC=${ARCHLOC:-"$HOME/archives"}
+
+function fusage()
+{
+   echo "$msg"
+   /bin/cat <<EOT
+   install: install the setview scripts
+   Synopsis: 
+      install [options]
+      install [-h | --help] 
+
+   Options:
+      --git /path/to/program/git      ...path to GIT including the name
+                                      (defaults to ~/bin/git)
+      --installpath  ...path to install the setview executables
+                     (defaults to ~/bin)
+      --viewpath    ...path to the root for created view directories
+                    (defaults to ~/workspace)
+      --archivepath ...path to the root of tla managed archives 
+                    (defaults to ~/archives)
+      --debug       ...setting this causes the script to do nothing
+                    other than echo the actions it would have taken
+
+   Examples:
+      install       # install a user-local configuration only
+
+      install --tla /usr/local/bin/git   # use a shared git program
+
+         # use a local git with mounted project disks
+      install --viewpath /mnt/projects --archivepath /mnt/archives
+
+   When run without arguments, install places the setview scripts into a 
+   single user's home directory.
+
+   Files and Directories:
+      ~/bin   ...the default location of the setview executables
+      ~/workspace   ...the default location of the "views" (source trees)
+      ~/archives   ...the default location of the tla archives
+
+   Environment:
+      SOURCETREEROOT ...can be overridden to set the default for --viewpath
+      ARCHLOC        ...can be overridden to set the default for --archivepath
+EOT
+}
+
+git="";
+installpath="";
+viewpath="";
+archivepath="";
+while [[ ! -z "$1" ]]
+do
+   case $1 in
+   "-h"|"--help")
+      fusage ;
+      exit 0;
+   ;;
+   "--debug") export dbg="echo"
+   ;;
+   "--git")
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         git="$2";
+         shift;
+      fi
+   ;;
+   "--installpath")
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         installpath="$2";
+         shift;
+      fi
+   ;;
+   "--viewpath")
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         viewpath="$2";
+         shift;
+      fi
+   ;;
+   "--archivepath")
+      if [[ -z "$2" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         archivepath="$2";
+         shift;
+      fi
+   ;;
+   *) # incorrect command parameters
+      echo "$1 is an unexpected argument. Usage: " >&2;
+      fusage;
+      exit 1;
+   ;;
+   esac
+   shift; # get rid of $1
+done
+
+# use a locally installed git by default
+if [[ -z "$git" ]]
+then
+   git="~/bin/git"
+fi
+
+# make the install local to the home directory by default
+if [[ -z "$installpath" ]]
+then
+   installpath="~/bin/"
+fi
+
+# make views local to the home directory by default
+if [[ -z "$viewpath" ]]
+then
+   viewpath="~/workspace/"
+fi
+
+# make the archives local to the home directory by default
+if [[ -z "$archivepath" ]]
+then
+   archivepath="~/{archives}/"
+fi
+
+# git should be an executable only
+if [[ ! -x "$git" ]]
+then
+   echo "Warning: '$git' is not executable!"
+   # git really should be installed first
+   if [[ ! -f  $git ]]
+   then
+      echo "Warning: '$git' does not exist!!"
+   fi
+fi
+
+# don't accept a directory as the git argument
+if [[ -d  $git ]]
+then
+   echo "Error: '$git' is a directory. Please indicate a git executable!!"
+   exit 1
+fi
+
+# Try to create view and archive paths; ignore warnings if present
+/bin/mkdir -p -- "$viewpath"
+/bin/mkdir -p -- "$archivepath"
+
+# if the installpath doesn't exist, try to make it
+if [[ ! -d "$installpath" ]]
+then
+   /bin/mkdir -p $installpath
+fi
+
+# if the installpath still doesn't exist, bail out with an error
+if [[ ! -d "$installpath" ]]
+then
+   echo "Error: could not create '$installpath' as a directory."
+   exit 1
+fi
+
+# if the file manifest doesn't exist, bail out with an error
+if [[ ! -f "manifest.txt" ]]
+then
+   echo "Error: manifest.txt file is missing or unreadable."
+   exit 1
+fi
+
+# Copy files and set perms
+while read file
+do
+   /bin/cp "$file" "$installpath/$file"
+   chmod ugo+rx "$installpath/$file"
+done < manifest.txt
+
+/bin/cat > ENV.setview <<EOT
+#!/bin/bash
+export GIT=${installpath}/git
+export SOURCETREEROOT=${viewpath}
+export ARCHLOC=${archivepath}
+export SETVIEWINSTALLPATH=${installpath}
+EOT
+
+if [[ -f "$installpath/ENV.setview" ]]
+then
+   echo "The setview tools were previously installed."
+   echo "Should I overwrite the existing ENV.setview configuration file?"
+   select yorn in Yes No 
+   do
+       if [[ $yorn == "Yes" ]]
+       then
+          /bin/cp ENV.setview "$installpath/ENV.setview"
+          chmod ugo+rx "$installpath/ENV.setview"
+       fi
+       break
+   done
+else
+    /bin/cp ENV.setview "$installpath/ENV.setview"
+    chmod ugo+rx "$installpath/ENV.setview"
+fi

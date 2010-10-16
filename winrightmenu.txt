@@ -1,0 +1,23 @@
+From http://www.jfitz.com/tips/rclick_custom.html, Oct 2006
+
+If you want to avoid modifying the registry directly, many of the changes described here can also be made in Windows Explorer's "Folder Options" menu. To use this approach, double click "My Computer", select the "Tools" menu, then "Folder Options", then the "File Types" tab. From here, you can highlight the file type you wish to change, then click the "Advanced" button to change the menu options that appear for the file type. This won't give you complete control of every option, but it is probably sufficient for most needs, and it is much less likely to cause problems as a result of accidental changes to the wrong registry keys.
+
+
+
+Question:
+"How do I remove unwanted options that appear on right-click menus after installing software?"
+
+Answer:
+Usually, all that is required is to remove the appropriate key under the shellex\ContextMenuHandlers key in HKEY_CLASSES_ROOT for file type "*". 
+
+
+In the sample shown, deleting "gvim" will remove the right-click options for the GUI Vim program I installed. I'd recommend making a back up of the key data in case you want to put it back in later. If you don't find the correct ContextMenuHandlers item under "*" you could try looking under specific file extensions. You could also try searching the registry for the text that appears on the menu. When searching, don't forget to preface any character that is underlined in the menu with an "&". The ampersand is typically used to identify the character to underline when a menu entry's text is saved in the registry.
+
+
+One of the best online sources for information about the various options is at: http://registry.winguides.com/display.php/442/
+
+
+
+
+
+

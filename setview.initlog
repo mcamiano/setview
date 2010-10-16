@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# $1 = label for the immediate task at hand
+# $1 = -c  to close the log
+
+
+insertsql=<<EOT
+insert into timelog 
+(
+     username,
+     viewname,
+     timestart,
+     timeend,
+     viewclosedproperly,
+     tasklabel
+)
+values
+(
+   '${LOGNAME:-$USERNAME}',
+   '$viewname',
+   now(),
+   now()+INTERVAL 1 HOUR,
+   0,
+   '$1'
+);
+EOT
+
+updatesql=<<EOT
+update timelog set 
+(
+     timestart,
+     timeend,
+     viewclosedproperly,
+     tasklabel
+)
+values
+(
+   '${LOGNAME:-$USERNAME}',
+   '$viewname',
+   now(),
+   now()+INTERVAL 1 HOUR,
+   0,
+   '$1'
+where 
+     username = '${LOGNAME:-$USERNAME}'
+ and timestart = '${viewtimestamp}'
+ and viewname = '$viewname'
+EOT
+
+if [[ "$1" = "-c" ]]
+then
+   mysql -h localhost -u ${1:-viewtime} -p${2:admin} viewtime <<EOT
+$updatesql
+EOT
+else
+   mysql -h localhost -u ${1:-viewtime} -p${2:admin} viewtime <<EOT
+$updatesql
+EOT
+fi

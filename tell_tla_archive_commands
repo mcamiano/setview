@@ -1,0 +1,21 @@
+#!/bin/bash
+# Shell script to show tla's subcommands which require a default Archive or -A option
+# To avoid a security hole, this script embeds the location of the tla program
+# See below to change the location
+
+. ${0%/*}/ENV.setview   # Environment
+
+export TLA=${TLA:-$HOME/bin/tla}
+
+# obtain a list of subcommands from 'tla help', 
+# for each subcommand, call 'tla subcommand --help' 
+# if -A is found in the output, deduce the need for a specified archive 
+# and output the command name
+
+$TLA help | grep : | cut -d: -f1 | while read a
+do 
+   if [[ $($TLA $a --help | grep -- "-A" |wc -l) -eq 1 ]] 
+   then 
+      echo $a
+   fi
+done

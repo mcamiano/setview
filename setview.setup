@@ -1,0 +1,292 @@
+#!/bin/bash
+# Shell script to instantiate shell functions, which act as a permeable user interface along with tla
+
+. ${0%/*}/ENV.setview   # Environment
+
+TLA=${TLA:-$HOME/bin/tla}
+STDSOURCETREEROOT=${HOME}/{views}
+SOURCETREEROOT=${SOURCETREEROOT:-$STDSOURCETREEROOT}
+
+export TLA SOURCETREEROOT
+export VIEWMAXDEPTH=7
+
+###################################################################
+# obtain a list of subcommands from 'tla help', 
+# for each subcommand, call 'tla subcommand --help' 
+# if -A is found in the output, deduce the need for a specified archive 
+# and output the command name
+
+function tla_archive_commands() 
+{
+   "$TLA" help | grep : | cut -d: -f1 | while read a
+   do if [[ $( "$TLA" $a --help | grep -- "-A" |wc -l) -eq 1 ]] 
+      then 
+         echo $a
+      fi
+   done
+}
+export -f tla_archive_commands
+
+
+###################################################################
+# obtain a list of subcommands from 'tla help', 
+# for each subcommand, call 'tla subcommand --help' 
+# if -A is NOT found in the output, deduce that a specified archive 
+# is not needed, and output the command name
+
+function tla_no_archive_commands()
+{
+   "$TLA" help | grep : | cut -d: -f1 | while read a
+   do if [[ $( "$TLA" $a --help | grep -- "-A" |wc -l) -ne 1 ]] 
+      then 
+         echo $a
+      fi
+   done
+}
+export -f tla_no_archive_commands
+
+###################################################################
+# Shell function to list local views into existing archive projects
+function listviews() 
+{
+if [[ "$1" = "-l" ]]
+then
+   find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -printf "%h\n"
+elif [[ "$1" = "-m" ]]
+then
+   cd $SOURCETREEROOT
+   find . -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -printf "%h\n" | while read name
+   do
+      fpart=$(basename $name)
+      dirpart=${name##\./}
+      dirpart=${dirpart%%/*}
+      echo "$dirpart	~/$fpart"
+   done
+else
+   find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -printf "%h\n" | while read name 
+   do
+      basename $name 
+   done
+fi
+}
+export -f listviews
+
+
+###################################################################
+# Shell function to list archives
+function listarchives() 
+{
+   ( "$TLA" archives --names )
+}
+export -f listarchives
+
+###################################################################
+# Shell function to bootstrap source files into the archive 
+function inittree() 
+{
+   "$TLA" inventory --names --both --source  | xargs "$TLA" add
+   "$TLA" import
+}
+export -f inittree
+
+###################################################################
+# Shell function to set up tla subcommands as shell functions
+function tlacurry()
+{
+f=$(tla_archive_commands | while read name
+do
+   echo "function $name() { \$TLA $name -A \$TLAarchive \$* ; }; "
+done)
+eval "$f"
+
+eval "$f"
+}
+export -f tlacurry
+
+###################################################################
+# Shell function to set up tla subcommands as shell functions
+function tlacurryall()
+{
+f=$(tla_archive_commands | while read name
+do
+   echo "function $name() { \$TLA $name -A \$TLAarchive \$* ; }; "
+done)
+eval "$f"
+
+f=$(tla_no_archive_commands | while read name
+do
+   if [[ $name != "mv" && $name != "id" && $name != "rm" ]]
+   then
+      echo "function $name() { \$TLA $name \$* ; }; "
+   fi
+done)
+
+eval "$f"
+}
+export -f tlacurryall
+
+###################################################################
+# Shell function to set up tla subcommands as shell functions
+# less likely to work between upgrades of tla
+function tlacurryallfaster()
+{
+   
+f=$(while read name
+do
+   echo "function $name() { \$TLA $name -A \$TLAarchive \$* ; }; "
+done <<EOT
+my-default-archive
+init-tree
+set-tree-version
+undo
+changes
+file-diff
+diff
+archive-setup
+make-category
+make-branch
+make-version
+import
+commit
+get
+get-changeset
+lock-revision
+abrowse
+rbrowse
+categories
+branches
+versions
+revisions
+ancestry
+ancestry-graph
+cat-archive-log
+cacherev
+cachedrevs
+uncacherev
+archive-meta-info
+archive-snapshot
+archive-version
+archive-fixup
+make-log
+add-log-version
+remove-log-version
+logs
+cat-log
+changelog
+log-for-merge
+merges
+new-merges
+tag
+branch
+switch
+update
+replay
+star-merge
+apply-delta
+missing
+join-branch
+sync-tree
+changes
+file-diff
+file-find
+lock-pristine
+add-pristine
+find-pristine
+library-find
+library-add
+library-remove
+library-categories
+library-branches
+library-versions
+library-revisions
+library-log
+library-file
+parse-package-name
+EOT
+)
+eval "$f"
+
+   # Under Mandrake Linux, /etc/bashrc contains an unqualified reference to "id"
+   # Other commonly unqualified names in programs include mv and rm
+   # So we exclude them from the currying.
+f=$(while read name
+do
+   if [[ $name != "mv" && $name != "id" && $name != "rm" ]]
+   then
+      echo "function $name() { \$TLA $name \$* ; }; " 
+   fi
+done <<EOT
+help
+my-id
+register-archive
+whereis-archive
+archives
+tree-root
+tree-version
+tree-id
+tree-revision
+redo
+export
+inventory
+tree-lint
+lint
+id
+id-tagging-method
+add
+add-id
+delete-id
+move-id
+touch
+rm
+mv
+explicit-default
+default-id
+id-tagging-defaults
+changeset
+mkpatch
+apply-changeset
+dopatch
+show-changeset
+make-archive
+archive-mirror
+log-versions
+build-config
+cat-config
+delta
+pristines
+my-revision-library
+library-config
+library-archives
+grab
+valid-package-name
+escape
+EOT
+)
+
+eval "$f"
+
+}
+export -f tlacurryallfaster
+
+###################################################################
+# Shell script to define a function which uses tla within a view
+function tla()
+{
+   cmd=$1
+   shift
+   case "$cmd" in ( "my-default-archive"| "init-tree"| "set-tree-version"| "undo"| "changes"| "file-diff"| "diff"| "archive-setup"| "make-category"| "make-branch"| "make-version"| "import"| "commit"| "get"| "get-changeset"| "lock-revision"| "abrowse"| "rbrowse"| "categories"| "branches"| "versions"| "revisions"| "ancestry"| "ancestry-graph"| "cat-archive-log"| "cacherev"| "cachedrevs"| "uncacherev"| "archive-meta-info"| "archive-snapshot"| "archive-version"| "archive-fixup"| "make-log"| "add-log-version"| "remove-log-version"| "logs"| "cat-log"| "changelog"| "log-for-merge"| "merges"| "new-merges"| "tag"| "branch"| "switch"| "update"| "replay"| "star-merge"| "apply-delta"| "missing"| "join-branch"| "sync-tree"| "changes"| "file-diff"| "file-find"| "lock-pristine"| "add-pristine"| "find-pristine"| "library-find"| "library-add"| "library-remove"| "library-categories"| "library-branches"| "library-versions"| "library-revisions"| "library-log"| "library-file"| "parse-package-name"):
+   $TLA $cmd -A  "$TLAarchive" $*
+   ;;
+   (*):
+   $TLA $cmd $*
+   esac
+}
+export -f tla
+
+
+function lcd()
+{
+   dir=${1:-$VIEWHOME}
+   cd $dir
+}
+export -f lcd

@@ -1,0 +1,208 @@
+The files in this package are released under the GNU General Public License, the same as the GNU Arch program. See the file COPYING for details.
+
+Motivation
+==========
+
+A combination of a login shell, a conventional location for archives and views, a command shorthand, and unencumbered interaction with the core tla package make the Setview scripts my preferred method of using GNU Arch. 
+
+If you use a lot of the features of GNU Arch, you may be disappointed by the lack of bells and whistles in the Setview scripts to deal with team-oriented software development. This has an entirely selfish reason: I originally developed Setview for my individual use, because CVS presented too many ideosyncratic caveats, and ClearCase would have required way too much money effort to maintain. Arch has its own caveats, but it can be installed with virtually no administrative effort.
+
+
+Installing - Prerequisites
+==========================
+
+Setview is a Bash Bigot
+-----------------------
+FYI, the current incarnation of the Setview scripts are totally biased in favor of users of the Bash shell. You should be able to get by with small adaptations if you use a similar shell such as KSH. Users of CSH-like shells will be disappointed. 
+
+The install script also uses several Linux text processing tools like cat and sed. 
+
+Install GNU Arch
+----------------
+Before you install, you should get a working copy of the GNU Arch program. At the time of this writing, the Setview scripts were configured for the recently released GNU Arch version 1.3.1 [1].
+
+After installing tla, make sure you invoke the my-id subcommand to identify yourself to Arch:
+
+   tla my-id "Firstname Lastname <emailaddr>"
+
+*****************************************************************************
+The Setview scripts are by no means goldplated against all possible configuration states, so don't skip the my-id step.
+*****************************************************************************
+
+
+Extract the Distribution File
+-----------------------------
+The GNU Arch Setview Scripts are usually provided in a compressed Tar/GZip file named "setview.tgz". Untar this file to a local directory using the command:
+
+   tar -xvzf setview.tgz
+
+
+
+Decide Where Things Will Go (or Went)
+-------------------------------------
+
+Before installing, think about the following parameters:
+   - Where you installed the GNU Arch 'tla' program. 
+   Reason: The Setview scripts fixate the path to the tla command in order to avoid circular redefinitions, so it needs to know where tla is located.
+
+   - Where your archives will be located.
+   Reason: You can place archives under $HOME/{archives} by default, or you can have them placed on locally mounted disk partition. I place mine on a separate device with plenty of available storage space.
+
+   - Where your 'views' [2] will be located.
+   Reason: You can place views under $HOME/{views} by default, or - like archives - you can have them placed on locally mounted disk partition. It is probably safest to place it on a disk device separate from the archives to provide a tactical safeguard, but I usually put them on the same mounted partition [3].
+
+
+Installing
+===========
+
+Once you've figured out where things will go, invoke ./install: 
+
+   ./install --tla /projects/tools/bin/tla --installpath /projects/tools/bin  --viewpath /projects/views --archivepath /projects/archives
+
+If you leave out the options for --viewpath or --archivepath, they default to $HOME/{views} and $HOME/{archives} respectively. You may not want to share such settings with others, so if you default them you should also let it default --installpath to $HOME/bin [4].
+
+When you run ./install, it stream-edits the scripts to fixate the path to the 'tla' program. It does this because the Setview scripts shadow the command name 'tla' using shell functions. To avoid circular references, the scripts always call the real 'tla' command through an absolute path.
+
+The install script will also try to create the --viewpath and --archivepath locations if they don't exist. 
+
+
+Set Your Path
+-------------
+
+Once installed, be sure your path is set up to find the scripts. The tla executable need not be in the path because of the way Setview fixates the tla path.
+
+
+
+Using the Setview Scripts
+=========================
+
+
+Get or Make an Archive
+----------------------
+
+You will have to bootstrap your archives before you can create views into them.
+If you have a remote archive from which you can take a branch, do so.
+If you already have registered archives, you can used them without additional setup. 
+
+Beware of attempting to use the Setview scripts with remote archives. This is completely untested. If it worked at all, it would probably be REAL SLOW.
+
+If you don't have an archive and are unfamiliar with the tla command set, the Setview scripts provide a utility to bootstrap a blank project and category. The script is called "newarchive", and expects a client name and a project name [5].
+
+For example:
+   $ newarchive johndoecompany website
+
+   * creating category Mitch.Amiano@AgileMarkup.com--2005-johndoecompany/website
+   * creating branch Mitch.Amiano@AgileMarkup.com--2005-johndoecompany/website--mainline
+   * creating version Mitch.Amiano@AgileMarkup.com--2005-johndoecompany/website--mainline--0.1
+
+   $ ls /projects/archives
+
+   johndoecompany
+
+
+Make a View Into The Archive
+----------------------------
+
+Views are tla source trees placed in a well-defined location. The Setview scripts provide a utility script called "mkview" that performs most of the administrative steps needed to create and initialize the source tree. You normally invoke "mkview" with an archive name, a project name, and the name you want to give your view:
+
+   mkview -a Mitch.Amiano@AgileMarkup.com--2005-johndoecompany -c website--mainline--0.1  -v doesite
+
+But you can be lazy and have it use the category name as the view name:
+
+   mkview -a Mitch.Amiano@AgileMarkup.com--2005-johndoecompany -c website--mainline--0.1
+
+and if you are really lazy you can wildcard the archive and/or category names and pick from a list:
+
+   mkview -a ? -c ?
+
+For instance:
+./mkview -a  Mitch.Amiano@AgileMarkup.com--2005-johndoecompany -c ? -v foo
+Please choose one of the following category-versions:
+1) orders--mainline--1.0
+2) stylesheets--mainline--1.6
+3) website--mainline--1.1
+4) Quit
+#? 3
+Created /projects/views/johndoecompany/foo
+Init-tree johndoecompany/foo Mitch.Amiano@AgileMarkup.com--2005-johndoecompany/website--mainline--1.1
+
+
+There is no limit to the number of views you can make for a project category. Nor do the views need to have the same name as the project catory, although it is a good idea to maintain a meaningful nomenclature.
+
+Mkview has other options; One useful option is the -g (get) option, which you can use to pull sources from an existing archive to populate your new view. 
+
+
+Viewing Your Sources
+---------------------
+
+Once you have a view created into your archive, the Setview scripts provide a way of creating a custom shell environment in which to edit, browse, and perform source tree administration. The name of the primary script is, of course, "setview". 
+
+When you call setview without arguments, it prompts you to select from a list of views:
+
+./setview
+Views by the name '' exist for multiple archives.
+Please select from the following:
+1) /projects/views/johndocompany/foo  3) /projects/views/smith/xsl
+2) /projects/views/brown/oops         4) Quit
+> 1
+
+As soon as you make a selection, setview clears the screen, sets the prompt, defines several shell functions (including a view-specific version of tla), changes directory to the view source tree, and spawns a new (login-like) shell:
+
+mitch@SIGMA:/projects/views/johndocompany/foo
+/projects/views/johndocompany/foo$ 
+
+If you do an "ls", you see that it is an ordinary Arch source tree:
+/projects/views/johndocompany/foo$ ls
+{arch}
+
+You can check that "tla" is invoked with the correct archive:
+mitch@SIGMA:/projects/views/johndocompany/foo$ tla my-default-archive
+my-default-archive: no default archive
+mitch@SIGMA:/projects/views/johndocompany/foo$ tla categories
+website
+
+Just a little shell slight of hand there... Setview uses a shell function to curry in the archive name corresponding to the "current view".
+
+
+Shorthand Shell
+---------------
+
+Accessing subcommands feels unnatural, so Setview provides additional utilities that you can use at your own convenience - and your own risk. The most important are a set of currying functions which create a shell function for each tla subcommand, thereby avoiding having to type an extra four characters [6].
+
+nop@SIGMA:/projects/views/johndoecompany/foo$ tlacurryallfaster
+nop@SIGMA:/projects/views/johndoecompany/foo$ categories
+website
+mitch@SIGMA:/projects/views/johndoecompany/foo$ rbrowse
+Mitch.Amiano@AgileMarkup.com--2005-johndoecompany
+   website
+         website--mainline
+                  website--mainline--0.1
+
+The tlacurryallfaster uses a hard-coded list of subcommands. (Other versions of the curry function generators are included which scan the tla help output for lists of subcommands, but these are considerably slower.)
+
+
+
+Status
+======
+
+Setview should be considered alpha-quality code, although I use it on a daily basis for much of my work.  The scripts are at patchlevel 4. This is the first public release, so I guess it can be considered version "Setview alpha 0.4"
+
+
+I'll be posting updates to the Setview scripts on an infrequent basis to the files section at <http://home.agilemarkup.com/>. Basically, whenever I improve upon them and find the time to, I'll make another release. If others start getting interested in the scripts, I may put some more formal roadmap and schedule in place.
+
+
+
+
+End Notes
+
+[1] Newer versions of Arch may require fixes and alterations, particularly to the 'tlacurryallfaster' function defined in "setview.setup". 
+
+[2] The Setview scripts calls its tla source trees 'views'. They are the same tla source trees, with no additional metadata or files. The distinction is that Setview views are all placed under a well-defined root.
+
+[3] A source tree can at get you a specific version - usually the latest version - of a project, but you really should be doing backups anyway.
+
+[4] There are better ways of organizing the paths for configurations with multiple-users on a single machine, but this wasn't a priority for my workflows. It is probably also worthwhile to use an environment file in the user's home directory or under the .arch-params directory, to set things like the view root per user; again this wasn't a critical issue.
+
+[5] Neither GNU Arch nor setview require that convention, but I find it useful.
+
+[6] We programmers are lazy lot, in an circuitously busy sort of way.
