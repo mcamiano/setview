@@ -1,70 +1,114 @@
-#!/bin/bash
+#!/bin/bash -l
 # Shell script to override the default archive for a new command shell
 
-if test -f ~/.gitview 
+if test -f ~/.setview 
 then
-  . ~/.gitview   # Environment
+  . ~/.setview   # Environment
 fi
-
 
 SCM=${SCM:-$HOME/bin/git}
 STDSOURCETREEROOT=$HOME/workspace
 SOURCETREEROOT=${SOURCETREEROOT:-$STDSOURCETREEROOT}
+ARCHIVEPATH=$HOME/archived_projects
 EDITOR=${EDITOR:-/bin/vi}
 SHELLCMD=/bin/bash   # Assumed to be a bash compatible shell
 FINDCMD=/usr/bin/find   # Assumed to be a POSIX compatible find
-VIEWMAXDEPTH=7
-export VIEWMAXDEPTH SCM SOURCETREEROOT SHELLCMD FINDCMD
+VIEWMAXDEPTH=2
+export VIEWMAXDEPTH SCM SOURCETREEROOT ARCHIVEPATH SHELLCMD FINDCMD 
 
-function findarchives()
+function listarchives()
 {
-   opts="$1"
-   $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git $opts -not -path */.git/* -exec dirname {} \;
+  opts="$1"
+  $FINDCMD $ARCHIVEPATH -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git $opts -not -path */.git/* -exec dirname {} \; |while read name
+  do 
+    basename $name
+  done
 }
-export -f findarchives
+export -f listarchives
+
+# Shell function to list local views of existing archive projects
+function listviews() 
+{
+  opts="$1"
+  if [[ "$opts" = "-l" ]]
+  then
+    $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -exec dirname {} \;
+  elif [[ "$opts" = "-m" ]]
+  then
+    cd $SOURCETREEROOT
+    $FINDCMD . -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -exec dirname {} \; | while read name
+    do
+       fpart=$(basename $name)
+       dirpart=${name##\./}
+       dirpart=${dirpart%%/*}
+       echo "$dirpart	~/$fpart"
+    done
+  else
+    $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git $opts -not -path */.git/* -exec dirname {} \; | while read name 
+    do
+       basename $name 
+    done
+  fi
+}
+export -f listviews
+
+function lcd()
+{
+  cd ${1:-$VIEWHOME}
+}
+export -f lcd
+
 
 function fusage()
 {
    echo "$msg"
    /bin/cat <<EOT
-   setview: override the default archive, setup a direct Arch command environment
-   For general help inside of a view, type "viewhelp"
+   setview: manage and set up a default shell environments for GIT work
 
    Synopsis: 
       setview { viewname | -v viewname | --view viewname | --viewname viewname } [options]
       setview [-h | --help] 
 
    Options:
-      --editlog       ...edit the next commit log and continue
-      --task message  ...branch locally, add and commit with the given message automatically upon normal shell exit
       --exec cmdlist  ...execute the commands under the view and exit
       --pause msg     ...prompt with a message and pause just before exiting
+
+      --archive   ...unstage a repository viewname by moving it from SOURCETREEROOT to ARCHIVEPATH
+      --stage     ...stage a repository viewname by moving it from ARCHIVEPATH to SOURCETREEROOT
 
    Examples:
       setview myview
       setview -v myview
 
       setview --view myview --exec "git add flarg.cpp"
-      setview --view myview --editlog
 
    When run without arguments, setview prompts interactively for a view name.
    It also prompts if a view name does not uniquely identify a view.
 
    Environment:
-      EDITOR        ...the  --editlog option invokes the command in this variable 
-                    to edit the log, or /bin/vi if not set
-
-      VIEWMAXDEPTH  ...depth to search view root dir for {arch} source trees
+      VIEWMAXDEPTH  ...depth to search view root dir for GIT source trees
                     Source trees are typically nested within customer-specific
 		    or project-specific view subdirectories. This variable
 		    lets you shorten the searches.
+
+   Notes:
+     GIT does not distinguish between archives and source trees. Setview does: A view is a working repo, and an archive is an old view. 
+       An archive is the entire local working context for a client project, shoved out of the way. 
+
+     A Setview view is simply a non-bare GIT repository.  
+     
+     Ideally, views should be emphemeral, created and dropped upon demand.
+
+   Not Yet Implemented:
+      --task message  ...branch locally, add all files and commit with the given message automatically upon normal shell exit
 
    Limitations:
    The --exec option may pose a risk based on your handling of SSH. 
    It is intended for invoking archive commends over a lan or intranet through 
    secured ssh connections. 
-   
-   This script is meant as a thin layer over the scm, not recommended for use in 
+  
+
+   This script is meant as a thin layer over git and is not recommended for use in 
    public facing interfaces. 
 EOT
 }
@@ -94,8 +138,7 @@ do
          exit 1;
       else
          export view="$2";
-         # mca 12/12/2005 pick up source trees at deep depths
-         names=$(findarchives "-path $view")
+         names=$(listviews "-path $view")
          shift;
       fi
    ;;
@@ -138,16 +181,38 @@ do
          shift;
       fi
    ;;
+   --archive)
+      if [[ -z "$1" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         archive=1;
+         shift;
+      fi
+   ;;
+   --stage)
+      if [[ -z "$1" ]]
+      then
+         echo "$1 missing an argument. Usage: " >&2;
+         fusage;
+         exit 1;
+      else
+         stage=1;
+         names=$(listarchives|grep "$view")
+         shift;
+      fi
+   ;;
    --*) # reject unknown args
          echo "$1 missing an argument. Usage: " >&2;
          fusage;
          read yorn
          exit 1;
    ;;
-   *) # default to view name
+   *) # default to a view name
       view=${1:-.*}
-      # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
-      names=$(findarchives|grep "$view")
+      names=$(listviews|grep "$view")
    ;;
    esac
    shift; # get rid of $1
@@ -156,9 +221,8 @@ done
 
 if [[ -z "$names" ]]
 then
-   # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
-   echo "No view name specified, on view not found. Looking up views..." >&2;
-   names=$(findarchives)
+   echo "No view name specified, or view not found. Looking up views..." >&2;
+   names=$(listviews)
 fi
 
 num=$(echo $names | wc -w)
@@ -170,9 +234,13 @@ fi
 if [[ $num -eq 0 ]]
 then
    echo "The view '$view' is not a view for any current archive."
+   if [[ $stage == "1" ]]
+     echo "Cannot stage because the project cannot be found in $ARCHIVEPATH."
+     exit 1
+   fi
    echo "Please select from the following:"
-   # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
-   select name in  $(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; echo "Quit";)
+   
+   select name in  $(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -exec dirname {} \; echo "Quit";)
    do 
       if [[ ! -z "$name" ]]
       then
@@ -207,87 +275,43 @@ then
    exit;
 fi
 
+if [[ $archive == "1" ]]
+then
+   /bin/mv -iv ${SOURCETREEROOT}/${view} ${ARCHIVEPATH}
+   exit 0
+fi
+if [[ $stage == "1" ]]
+then
+   /bin/mv -iv ${ARCHIVEPATH}/${view} ${SOURCETREEROOT}
+   exit 0
+fi
+
 prompt=$(basename $view)
 archname=$(basename $(dirname $view) )
-   # locate archive source tree directory
-   # this was necessary under arch/tla/bazaar, but not git
-   # non-arch dvcs tools like git, in effect, use a remote repository as the "archive", or none at all
-
 (
    thisarchive="$archname"
    thisview="$prompt"
    thishome="$view"
    VIEWHOME="$view"
-   export PS1="$prompt: " 
    export thisview thisarchive thishome VIEWHOME
 
-   cd "$VIEWHOME"
-    
-   # Shell function to list local views of existing archive projects
-   function listviews() 
-   {
-     if [[ "$1" = "-l" ]]
-     then
-        find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n"
-     elif [[ "$1" = "-m" ]]
-     then
-        cd $SOURCETREEROOT
-        find . -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n" | while read name
-        do
-           fpart=$(basename $name)
-           dirpart=${name##\./}
-           dirpart=${dirpart%%/*}
-           echo "$dirpart	~/$fpart"
-        done
-     else
-        find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n" | while read name 
-        do
-           basename $name 
-        done
-     fi
-   }
-   export -f listviews
+   lcd
 
-
-   # Shell function to list archives
-   function listarchives() 
-   {
-      ( cd $ARCHLOC ; ls )
-   }
-   export -f listarchives
-
-   function lcd()
-   {
-      dir=${1:-$VIEWHOME}
-      cd $dir
-   }
-   export -f lcd
-
-
-
-   if [[ $task == "1" ]]    # Append task message to commit log
-   then
-      branchname="${taskmessage:0:12}_$(date +%H%M_%m%d%y)"
-      branchname=${branchname// /_}
-      $SCM branch ${branchname}
-      trap "$SCM add .; $SCM commit -m \"branchname\"" EXIT
-   fi
-
-   if [[ "$editlog" == "1" ]]   # invoke editor on commit log
-   then
-      "$EDITOR" -- $($SCM make-log 2>/dev/null)
-   fi
+   # if [[ $task == "1" ]]
+   # then
+      # branchname="setview_${taskmessage:0:10}_$(date +%H%M_%d%m%y)"
+      # branchname=${branchname// /_}
+      # $SCM branch ${branchname}
+      # trap "$SCM add .; $SCM commit -m \"$(date +%H:%M %d %m %y taskmessage)\"" EXIT
+   # fi
 
    if [[ $execcmd == "0" ]]
    then
-         # Make the terminal window look 'reset'
       clear
       pwd
-         # Invoke a new login under the reconfigured environment
-      $SHELLCMD --login
+      PS1="$prompt: " exec $SHELLCMD -i
    else
-         # Using the reconfigured environment, execute the commands and then exit
-      $SHELLCMD --login -c "$cmdstring"
+      exec $SHELLCMD -c "$cmdstring"
    fi
 )
 if [[ $pause == "1" ]]

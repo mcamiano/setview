@@ -1,7 +1,0 @@
-listarchives
-listviews
-mkview
-setview
-newarchive
-setarchive
-setview.setup

@@ -1,5 +1,0 @@
-user = ${1%%@*}
-server = ${1##*@}
-branch = $2
-git push $server $branch
-ssh ${user}@$server "cd /path/to/www; git pull"
