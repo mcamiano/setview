@@ -1,13 +1,27 @@
 #!/bin/bash
 # Shell script to override the default archive for a new command shell
-. ${0%/*}/ENV.setview   # Environment
 
-GIT=${GIT:-$HOME/bin/git}
+if test -f ~/.gitview 
+then
+  . ~/.gitview   # Environment
+fi
+
+
+SCM=${SCM:-$HOME/bin/git}
 STDSOURCETREEROOT=$HOME/workspace
 SOURCETREEROOT=${SOURCETREEROOT:-$STDSOURCETREEROOT}
 EDITOR=${EDITOR:-/bin/vi}
+SHELLCMD=/bin/bash   # Assumed to be a bash compatible shell
+FINDCMD=/usr/bin/find   # Assumed to be a POSIX compatible find
 VIEWMAXDEPTH=7
-export VIEWMAXDEPTH GIT SOURCETREEROOT 
+export VIEWMAXDEPTH SCM SOURCETREEROOT SHELLCMD FINDCMD
+
+function findarchives()
+{
+   opts="$1"
+   $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git $opts -not -path */.git/* -exec dirname {} \;
+}
+export -f findarchives
 
 function fusage()
 {
@@ -22,19 +36,16 @@ function fusage()
 
    Options:
       --editlog       ...edit the next commit log and continue
-      --task message  ...append a message to the next commit log and continue
-      --curryarch     ...turn tla subcommands into shell functions and continue
+      --task message  ...branch locally, add and commit with the given message automatically upon normal shell exit
       --exec cmdlist  ...execute the commands under the view and exit
       --pause msg     ...prompt with a message and pause just before exiting
 
    Examples:
       setview myview
       setview -v myview
-      setview --view myview --curryarch
 
       setview --view myview --exec "git add flarg.cpp"
       setview --view myview --editlog
-      setview --view myview --curryarch --exec "commit"
 
    When run without arguments, setview prompts interactively for a view name.
    It also prompts if a view name does not uniquely identify a view.
@@ -51,14 +62,14 @@ function fusage()
    Limitations:
    The --exec option may pose a risk based on your handling of SSH. 
    It is intended for invoking archive commends over a lan or intranet through 
-   secured ssh connections. As this script is only a thin layer on tla, and 
-   tla relies mostly on POSIX login mechanisms and signing for security,
-   the --exec feature was not deemed to add much of an additional risk.
+   secured ssh connections. 
+   
+   This script is meant as a thin layer over the scm, not recommended for use in 
+   public facing interfaces. 
 EOT
 }
 
 names="";
-curryarch=0;
 editlog=0;
 execcmd=0;
 cmdstring="";
@@ -82,17 +93,14 @@ do
          fusage;
          exit 1;
       else
-         view="$2";
-         # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
-         names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -path $view -not -path */{arch}/* -exec dirname {} \; )
+         export view="$2";
+         # mca 12/12/2005 pick up source trees at deep depths
+         names=$(findarchives "-path $view")
          shift;
       fi
    ;;
    --editlog)
       editlog=1;
-   ;;
-   --curryarch)
-      curryarch=1;
    ;;
    --pause)
       if [[ -z "$2" ]]
@@ -137,9 +145,9 @@ do
          exit 1;
    ;;
    *) # default to view name
-      view="$1"
+      view=${1:-.*}
       # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
-      names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; |grep "$view" )
+      names=$(findarchives|grep "$view")
    ;;
    esac
    shift; # get rid of $1
@@ -150,7 +158,7 @@ if [[ -z "$names" ]]
 then
    # mca 12/12/2005 alter find logic to pick up source trees at much deeper depths
    echo "No view name specified, on view not found. Looking up views..." >&2;
-   names=$(find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name {arch} -not -path */{arch}/* -exec dirname {} \; )
+   names=$(findarchives)
 fi
 
 num=$(echo $names | wc -w)
@@ -201,42 +209,73 @@ fi
 
 prompt=$(basename $view)
 archname=$(basename $(dirname $view) )
-   # mca 12/12/2005 fix up locating of source tree directories
-GITarchive=$(/bin/cat "$view/{arch}/++default-version"|cut -d"/" -f1)
-
-if [[ $GITarchive  = "" ]]
-then
-   echo "The archive $archname appears to be missing. Quitting..." >&2
-   exit 1;
-fi
+   # locate archive source tree directory
+   # this was necessary under arch/tla/bazaar, but not git
+   # non-arch dvcs tools like git, in effect, use a remote repository as the "archive", or none at all
 
 (
    thisarchive="$archname"
    thisview="$prompt"
-   # mca 12/12/2005 fix up locating of source tree directories
    thishome="$view"
    VIEWHOME="$view"
    export PS1="$prompt: " 
-   export thisview thisarchive GITarchive thishome VIEWHOME
+   export thisview thisarchive thishome VIEWHOME
 
    cd "$VIEWHOME"
-   . "${0%/*}/setview.setup" 
+    
+   # Shell function to list local views of existing archive projects
+   function listviews() 
+   {
+     if [[ "$1" = "-l" ]]
+     then
+        find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n"
+     elif [[ "$1" = "-m" ]]
+     then
+        cd $SOURCETREEROOT
+        find . -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n" | while read name
+        do
+           fpart=$(basename $name)
+           dirpart=${name##\./}
+           dirpart=${dirpart%%/*}
+           echo "$dirpart	~/$fpart"
+        done
+     else
+        find $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -printf "%h\n" | while read name 
+        do
+           basename $name 
+        done
+     fi
+   }
+   export -f listviews
+
+
+   # Shell function to list archives
+   function listarchives() 
+   {
+      ( cd $ARCHLOC ; ls )
+   }
+   export -f listarchives
+
+   function lcd()
+   {
+      dir=${1:-$VIEWHOME}
+      cd $dir
+   }
+   export -f lcd
+
 
 
    if [[ $task == "1" ]]    # Append task message to commit log
    then
-      log=$(tla make-log 2>/dev/null);
-      echo "$taskmessage"  >> "$log";
+      branchname="${taskmessage:0:12}_$(date +%H%M_%m%d%y)"
+      branchname=${branchname// /_}
+      $SCM branch ${branchname}
+      trap "$SCM add .; $SCM commit -m \"branchname\"" EXIT
    fi
 
    if [[ "$editlog" == "1" ]]   # invoke editor on commit log
    then
-      "$EDITOR" -- $($GIT make-log 2>/dev/null)
-   fi
-
-   if [[ $curryarch == "1" ]]   # introduce tla subcommands as shell functions
-   then
-      tlacurryallfaster
+      "$EDITOR" -- $($SCM make-log 2>/dev/null)
    fi
 
    if [[ $execcmd == "0" ]]
@@ -245,10 +284,10 @@ fi
       clear
       pwd
          # Invoke a new login under the reconfigured environment
-      bash --login
+      $SHELLCMD --login
    else
-         # Use the reconfigured environment but execute the commands and exit
-      bash --login -c "$cmdstring"
+         # Using the reconfigured environment, execute the commands and then exit
+      $SHELLCMD --login -c "$cmdstring"
    fi
 )
 if [[ $pause == "1" ]]

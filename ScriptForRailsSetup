@@ -19,6 +19,8 @@ exit
 EOT
 
 # check in as a GIT repository
-git 
+git init .
+git add .
+git commit -m "Initial Commit"
 
 # Status, Stash, Pull, Stash Apply, resolve merge conflicts, Push the GIT repository

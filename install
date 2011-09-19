@@ -1,7 +1,7 @@
 #!/bin/bash
 # Shell script to install the setview scripts
 SOURCETREEROOT=${SOURCETREEROOT:-$HOME/workspace
-ARCHLOC=${ARCHLOC:-"$HOME/archives"}
+ARCHLOC=${ARCHLOC:-"$HOME/repositories"}
 
 function fusage()
 {
@@ -19,7 +19,7 @@ function fusage()
                      (defaults to ~/bin)
       --viewpath    ...path to the root for created view directories
                     (defaults to ~/workspace)
-      --archivepath ...path to the root of tla managed archives 
+      --archivepath ...path to the root of managed repositories
                     (defaults to ~/archives)
       --debug       ...setting this causes the script to do nothing
                     other than echo the actions it would have taken
@@ -27,7 +27,7 @@ function fusage()
    Examples:
       install       # install a user-local configuration only
 
-      install --tla /usr/local/bin/git   # use a shared git program
+      install --git /usr/local/bin/git   # use a shared git program
 
          # use a local git with mounted project disks
       install --viewpath /mnt/projects --archivepath /mnt/archives
@@ -38,7 +38,7 @@ function fusage()
    Files and Directories:
       ~/bin   ...the default location of the setview executables
       ~/workspace   ...the default location of the "views" (source trees)
-      ~/archives   ...the default location of the tla archives
+      ~/archives   ...the default location of bare repositories
 
    Environment:
       SOURCETREEROOT ...can be overridden to set the default for --viewpath
@@ -185,7 +185,7 @@ do
    chmod ugo+rx "$installpath/$file"
 done < manifest.txt
 
-/bin/cat > ENV.setview <<EOT
+/bin/cat > .setview <<EOT
 #!/bin/bash
 export GIT=${installpath}/git
 export SOURCETREEROOT=${viewpath}
@@ -193,20 +193,20 @@ export ARCHLOC=${archivepath}
 export SETVIEWINSTALLPATH=${installpath}
 EOT
 
-if [[ -f "$installpath/ENV.setview" ]]
+if [[ -f "$installpath/.setview" ]]
 then
    echo "The setview tools were previously installed."
-   echo "Should I overwrite the existing ENV.setview configuration file?"
+   echo "Should I overwrite the existing .setview configuration file?"
    select yorn in Yes No 
    do
        if [[ $yorn == "Yes" ]]
        then
-          /bin/cp ENV.setview "$installpath/ENV.setview"
-          chmod ugo+rx "$installpath/ENV.setview"
+          /bin/cp .setview "$installpath/.setview"
+          chmod ugo+rx "$installpath/.setview"
        fi
        break
    done
 else
-    /bin/cp ENV.setview "$installpath/ENV.setview"
-    chmod ugo+rx "$installpath/ENV.setview"
+   /bin/cp .setview "$installpath/.setview"
+   chmod ugo+rx "$installpath/.setview"
 fi
