@@ -33,16 +33,6 @@ function listviews()
   if [[ "$opts" = "-l" ]]
   then
     $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -exec dirname {} \;
-  elif [[ "$opts" = "-m" ]]
-  then
-    cd $SOURCETREEROOT
-    $FINDCMD . -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git -not -path */.git/* -exec dirname {} \; | while read name
-    do
-       fpart=$(basename $name)
-       dirpart=${name##\./}
-       dirpart=${dirpart%%/*}
-       echo "$dirpart	~/$fpart"
-    done
   else
     $FINDCMD $SOURCETREEROOT -maxdepth $VIEWMAXDEPTH -mindepth 1  -follow -type d -name .git $opts -not -path */.git/* -exec dirname {} \; | while read name 
     do
@@ -235,6 +225,7 @@ if [[ $num -eq 0 ]]
 then
    echo "The view '$view' is not a view for any current archive."
    if [[ $stage == "1" ]]
+   then
      echo "Cannot stage because the project cannot be found in $ARCHIVEPATH."
      exit 1
    fi
@@ -291,8 +282,8 @@ archname=$(basename $(dirname $view) )
 (
    thisarchive="$archname"
    thisview="$prompt"
-   thishome="$view"
-   VIEWHOME="$view"
+   thishome="${SOURCETREEROOT}/${view}"
+   VIEWHOME="$thishome"
    export thisview thisarchive thishome VIEWHOME
 
    lcd
