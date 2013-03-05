@@ -2,15 +2,14 @@ The files in this package are released under the GNU General Public License, the
 
 Motivation
 ==========
-
-Setview is a combination of a login shell and a set of conventions for locating repos for archival and working tree purposes.
-a command shorthand, and unencumbered interaction with the core tla package make the Setview scripts my preferred method of using GNU Arch. 
-
 Setview is intended to help organize local git working trees. 
+
+Setview is a combination of a login shell and conventions for locating repos for archival and working tree purposes.
+
 It also helps decouple the build environments from one another. To improve isolation of environmental state, Setview launches a new login shell as you start an editing session.
 The shell can be customized by editing a startup file "~/.setview", which takes Bash commands. 
 
-Setview was originally written to help manage repositories for TLA Arch. Git is simpler than TLA, and this version of Setview is much simpler.
+Setview was originally written to help manage repositories for TLA Arch. Git's command lines are generally less verbose compared to TLA, and this version of Setview is much simpler.
 In particular, it does not curry git subcommmands into the shell. Use rtomayko/git-sh on GitHub for that. 
 
 
@@ -18,16 +17,14 @@ Installing - Prerequisites
 ==========================
 
 The Setview scripts are totally biased in favor of users of the Bash shell. 
-You should be able to get by with small adaptations if you use a similar shell such as KSH. Users of CSH-like shells will be disappointed. 
+You should be able to get by with small adaptations if you use a similar shell such as ZSH or KSH. Users of CSH-like shells will be disappointed. 
 
 Install GIT: Before you install, you should install GIT and set up the typical configuration (user name, email, etc).
 
-
-The install process is currently manual. Setview used to have an install script, but it became moot with most of the changes for git.
+The install process is currently manual. Setview used to have an install script, but it became moot with git.
 
 Installing
 ----------
-The install script also uses several Linux text processing tools like cat and sed. 
 Decide where your views will be located. Repos are placed under ~/workspace by default.
 Decide where your archived repos will be stored. By default, old repos you are no longer using are left as-is, in the same location as the views, but this may not be optimal.
 Edit the Setview script to set the default view and archived repo locations.
@@ -99,3 +96,17 @@ setview --help
 
    This script is meant as a thin layer over git and is not recommended for use in 
    public facing interfaces. 
+
+
+Roadmap
+=======
+Setview has been dormant for quite a while, but the general goal is to compartmentalize working contexts. 
+
+These are basically done by setview and/or git:
+* repos should be duplicatable and accessed as parallel views of the same repo
+* it should be harder to accidentally damage a working tree and lose the whole local repo
+* the shell should know something about the view you are in, enough to help navigate, search, etc
+* working trees should be garbage-collectible; that is, I want a pristine working environment before and after no matter how much mucking about I do with cloning or making spurious files. 
+
+This is an idea that I've had since it started, but have never really approached:
+* the process space and the filesystem space should be completely isolated in its own virtualized environment that starts when you open the view, can be suspended, and is garbage collected when you kill the view.
